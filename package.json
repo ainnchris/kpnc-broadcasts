@@ -4,7 +4,7 @@
   "description": "Kpnc Broadcasts - aplicacao de compartilhamento de tela em tempo real usando WebRTC.",
   "main": "server.js",
   "author": "Jp Dev's",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "scripts": {
     "start": "node server.js"
   },
