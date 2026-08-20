@@ -6,7 +6,7 @@
   "author": "Jp Dev's",
   "license": "UNLICENSED",
   "scripts": {
-    "start": "node server.js"
+    "start": "node patch-runtime.js && node server.js"
   },
   "engines": {
     "node": ">=18"
