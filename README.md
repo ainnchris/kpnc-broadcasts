@@ -6,7 +6,7 @@ Desenvolvido por **Jp Dev's**.
 
 ## Recursos
 
-- Novo design em azul, branco e preto, com tema claro e escuro (detalhe sempre em azul)
+- Novo design em azul, branco e preto, com tema claro e escuro
 - Criar e entrar em salas por código/link
 - Senha opcional da sala
 - Compartilhamento de tela
@@ -26,7 +26,7 @@ Desenvolvido por **Jp Dev's**.
 
 Requer Node.js 18+.
 
-```
+```bash
 npm install
 npm start
 ```
@@ -54,7 +54,7 @@ const rtcConfig = {
 
 ## Arquitetura
 
-O servidor (`server.js`) faz apenas signaling e gerenciamento de salas/chat. A mídia é enviada diretamente entre os participantes (peer-to-peer) via WebRTC — o servidor nunca processa vídeo ou áudio. O signaling troca SDP/ICE usando o padrão de "Negociação Perfeita" (Perfect Negotiation) para evitar conflitos quando várias transmissões começam ao mesmo tempo.
+O servidor (`server.js`) faz apenas signaling e gerenciamento de salas/chat. A mídia é enviada diretamente entre os participantes (peer-to-peer) via WebRTC. O servidor não processa vídeo ou áudio. O signaling troca SDP/ICE usando o padrão de "Negociação Perfeita" (Perfect Negotiation) para evitar conflitos quando várias transmissões começam ao mesmo tempo.
 
 Esta é uma implementação independente, sem copiar marca, identidade visual, textos ou assets de qualquer serviço de referência.
 
@@ -64,4 +64,4 @@ A arquitetura é mesh (P2P direto entre todos os participantes). Para salas pequ
 
 ---
 
-Kpnc Broadcasts — desenvolvido por **Jp Dev's**.
+**Kpnc Telas** — desenvolvido por **Jp Dev's**.
