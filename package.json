@@ -1,12 +1,12 @@
 {
-  "name": "kpnc-broadcasts",
-  "version": "1.0.0",
-  "description": "Kpnc Broadcasts - aplicacao de compartilhamento de tela em tempo real usando WebRTC.",
+  "name": "kpnc-telas",
+  "version": "2.0.0",
+  "description": "Kpnc Telas - chamadas de voz, telas e cameras em tempo real usando WebRTC.",
   "main": "server.js",
   "author": "Jp Dev's",
   "license": "UNLICENSED",
   "scripts": {
-    "start": "node patch-runtime.js && node server.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=18"
