@@ -39,9 +39,11 @@
     localMicStream: null,
     micMuted: true,
     broadcasting: false,
+    hiddenPeers: new Set(), // transmissões que o usuário optou por não assistir (só localmente)
     selectedMicId: '',
     selectedSpeakerId: '',
-    volume: 1
+    volume: 1,
+    noiseSuppression: true // cancelamento de eco/ruído do microfone, ligado por padrão
   };
 
   /* ============================================================
@@ -106,6 +108,7 @@
 
     selectMic: $('#select-mic'),
     btnToggleMicSettings: $('#btn-toggle-mic-settings'),
+    checkboxNoiseSuppression: $('#checkbox-noise-suppression'),
     selectSpeaker: $('#select-speaker'),
     speakerSupportHint: $('#speaker-support-hint'),
     rangeVolume: $('#range-volume'),
@@ -465,6 +468,11 @@
       tile.className = 'video-tile is-local';
       tile.innerHTML = `
         <video autoplay muted playsinline></video>
+        <div class="tile-actions">
+          <button type="button" class="tile-action-btn btn-expand-tile" data-id="local" title="Tela cheia">
+            <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
         <span class="tile-badge-you">Você</span>
         <span class="tile-label"><span class="dot-live"></span>${escapeHtml(state.selfName || 'Você')}</span>
       `;
@@ -491,6 +499,19 @@
       tile.className = 'video-tile';
       tile.innerHTML = `
         <video autoplay playsinline></video>
+        <div class="tile-hidden-overlay">
+          <svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.9 10.9 0 0 1 12 5c5 0 9 4.5 10.5 7-.6 1-1.4 2.1-2.4 3.1M6.6 6.6C4.5 8 3 10 1.5 12c1.9 3 5.6 7 10.5 7 1.4 0 2.7-.3 3.9-.9M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <p>Você parou de assistir a transmissão de ${escapeHtml(name)}.</p>
+          <button type="button" class="btn btn-ghost btn-show-tile" data-id="${peerId}">Assistir novamente</button>
+        </div>
+        <div class="tile-actions">
+          <button type="button" class="tile-action-btn btn-hide-tile" data-id="${peerId}" title="Parar de assistir">
+            <svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.9 10.9 0 0 1 12 5c5 0 9 4.5 10.5 7-.6 1-1.4 2.1-2.4 3.1M6.6 6.6C4.5 8 3 10 1.5 12c1.9 3 5.6 7 10.5 7 1.4 0 2.7-.3 3.9-.9M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button type="button" class="tile-action-btn btn-expand-tile" data-id="${peerId}" title="Tela cheia">
+            <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
         <span class="tile-label"><span class="dot-live"></span>${escapeHtml(name)}</span>
       `;
       el.videoGrid.appendChild(tile);
@@ -499,6 +520,14 @@
     videoEl.srcObject = stream;
     videoEl.volume = state.volume;
     applySinkId(videoEl);
+
+    // Se o usuário já tinha optado por não assistir esta pessoa, mantém pausado
+    if (state.hiddenPeers.has(peerId)) {
+      tile.classList.add('is-hidden-view');
+      videoEl.pause();
+    } else {
+      tile.classList.remove('is-hidden-view');
+    }
     updateStageEmptyVisibility();
   }
 
@@ -549,6 +578,87 @@
       mediaEl.setSinkId(state.selectedSpeakerId).catch(() => {});
     }
   }
+
+  /* ============================================================
+   * Parar de assistir uma transmissão específica (só localmente —
+   * não afeta o que os outros participantes veem)
+   * ============================================================ */
+  function toggleHideTile(peerId) {
+    const tile = document.getElementById(`tile-remote-${peerId}`);
+    if (!tile) return;
+    const videoEl = tile.querySelector('video');
+    const isHidden = state.hiddenPeers.has(peerId);
+
+    if (isHidden) {
+      state.hiddenPeers.delete(peerId);
+      tile.classList.remove('is-hidden-view');
+      videoEl.play().catch(() => {});
+    } else {
+      state.hiddenPeers.add(peerId);
+      tile.classList.add('is-hidden-view');
+      videoEl.pause();
+    }
+  }
+
+  /* ============================================================
+   * Tela cheia — se ajusta automaticamente à orientação do
+   * dispositivo (retrato/paisagem no celular, e no PC)
+   * ============================================================ */
+  function toggleFullscreen(videoEl) {
+    const current = document.fullscreenElement || document.webkitFullscreenElement;
+    if (current === videoEl) {
+      exitFullscreen();
+      return;
+    }
+    if (videoEl.requestFullscreen) videoEl.requestFullscreen().catch(() => {});
+    else if (videoEl.webkitRequestFullscreen) videoEl.webkitRequestFullscreen();
+    else if (videoEl.webkitEnterFullscreen) videoEl.webkitEnterFullscreen(); // iOS Safari (fullscreen nativo de vídeo)
+    tryLockLandscape();
+  }
+
+  function exitFullscreen() {
+    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+
+  function tryLockLandscape() {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  }
+  function tryUnlockOrientation() {
+    if (screen.orientation && screen.orientation.unlock) {
+      try { screen.orientation.unlock(); } catch { /* nada a fazer */ }
+    }
+  }
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) tryUnlockOrientation();
+  });
+  document.addEventListener('webkitfullscreenchange', () => {
+    if (!document.webkitFullscreenElement) tryUnlockOrientation();
+  });
+
+  // Um único listener para todos os botões de ação dos tiles (criados dinamicamente)
+  el.videoGrid.addEventListener('click', (event) => {
+    const hideBtn = event.target.closest('.btn-hide-tile');
+    if (hideBtn) { toggleHideTile(hideBtn.dataset.id); return; }
+
+    const showBtn = event.target.closest('.btn-show-tile');
+    if (showBtn) { toggleHideTile(showBtn.dataset.id); return; }
+
+    const expandBtn = event.target.closest('.btn-expand-tile');
+    if (expandBtn) {
+      const tile = expandBtn.closest('.video-tile');
+      const videoEl = tile && tile.querySelector('video');
+      if (videoEl) toggleFullscreen(videoEl);
+    }
+  });
+
+  // Duplo clique/duplo toque no vídeo também alterna tela cheia
+  el.videoGrid.addEventListener('dblclick', (event) => {
+    const videoEl = event.target.closest('video');
+    if (videoEl) toggleFullscreen(videoEl);
+  });
 
   /* ============================================================
    * Transmitir tela
@@ -623,8 +733,7 @@
   async function toggleMic() {
     if (!state.localMicStream) {
       try {
-        const constraints = { audio: state.selectedMicId ? { deviceId: { exact: state.selectedMicId } } : true };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const stream = await navigator.mediaDevices.getUserMedia(buildMicConstraints(state.selectedMicId));
         state.localMicStream = stream;
         for (const [, ps] of state.peers) {
           stream.getTracks().forEach((track) => ps.pc.addTrack(track, stream));
@@ -643,6 +752,37 @@
     updateMicButtonUI();
   }
 
+  /* Constraints do microfone — cancelamento de eco/ruído liga por padrão
+     para evitar que quem transmite capte pelo microfone o áudio dos
+     outros participantes saindo da própria caixa de som (efeito de eco). */
+  function buildMicConstraints(deviceId) {
+    const audio = {
+      echoCancellation: state.noiseSuppression,
+      noiseSuppression: state.noiseSuppression,
+      autoGainControl: state.noiseSuppression
+    };
+    if (deviceId) audio.deviceId = { exact: deviceId };
+    return { audio };
+  }
+
+  async function setNoiseSuppression(enabled) {
+    state.noiseSuppression = enabled;
+    if (!state.localMicStream) return;
+    const track = state.localMicStream.getAudioTracks()[0];
+    if (!track) return;
+    try {
+      await track.applyConstraints({
+        echoCancellation: enabled,
+        noiseSuppression: enabled,
+        autoGainControl: enabled
+      });
+    } catch {
+      // Alguns navegadores não aceitam mudar em tempo real — refaz a captura.
+      await switchMicDevice(state.selectedMicId);
+    }
+  }
+  el.checkboxNoiseSuppression.addEventListener('change', (e) => setNoiseSuppression(e.target.checked));
+
   function updateMicButtonUI() {
     const active = state.localMicStream && !state.micMuted;
     el.btnMic.classList.toggle('is-active', active);
@@ -655,7 +795,7 @@
     state.selectedMicId = deviceId;
     if (!state.localMicStream) return;
     try {
-      const newStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
+      const newStream = await navigator.mediaDevices.getUserMedia(buildMicConstraints(deviceId));
       const newTrack = newStream.getAudioTracks()[0];
       newTrack.enabled = !state.micMuted;
 
