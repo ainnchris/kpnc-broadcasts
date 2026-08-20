@@ -1,6 +1,6 @@
 LICENÇA PROPRIETÁRIA — TODOS OS DIREITOS RESERVADOS
 
-Kpnc Broadcasts
+Kpnc Telas
 Copyright (c) 2026 Jp Dev's. Todos os direitos reservados.
 
 Este software, incluindo mas não se limitando ao código-fonte, design de
@@ -21,8 +21,8 @@ Salvo autorização prévia e por escrito do Autor, é expressamente proibido:
      exceto nos limites em que isso seja expressamente permitido por
      lei aplicável, independentemente desta restrição;
   f) Remover, ocultar ou alterar avisos de direitos autorais, marca
-     ("Kpnc Broadcasts") ou créditos de autoria ("Jp Dev's") presentes
-     no Software.
+     ("Kpnc Telas") ou créditos de autoria ("Jp Dev's") presentes no
+     Software.
 
 2. USO AUTORIZADO
 
@@ -55,4 +55,4 @@ com o Autor, Jp Dev's.
 
 ---
 
-Kpnc Broadcasts é uma marca de Jp Dev's.
+Kpnc Telas é uma marca de Jp Dev's.
