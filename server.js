@@ -7,6 +7,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const PORT = process.env.PORT || 3000;
@@ -15,7 +16,9 @@ const app = express();
 // Entrega o cliente corrigido sem depender de cache do navegador/CDN.
 app.get('/js/app.js', (_req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.sendFile(path.join(__dirname, 'public', 'js', 'app-fixed.js'));
+  const main = fs.readFileSync(path.join(__dirname, 'public', 'js', 'app-fixed.js'), 'utf8');
+  const features = fs.readFileSync(path.join(__dirname, 'public', 'js', 'features.js'), 'utf8');
+  res.type('application/javascript').send(`${main}\n/* KPNC MEDIA FEATURES */\n${features}`);
 });
 app.use(express.static(path.join(__dirname, 'public'), { etag: true, maxAge: 0 }));
 app.get('/healthz', (_req, res) => res.status(200).send('ok'));
