@@ -1,8 +1,9 @@
 /**
- * Kpnc Broadcasts
+ * Kpnc Telas
  * Servidor de signaling e gerenciamento de salas (WebRTC mesh).
  * O servidor NUNCA toca em midia: apenas troca mensagens de sinalizacao
  * (SDP/ICE), gerencia salas, participantes, perfis e o chat em tempo real.
+ * Midia (tela, camera e chamada de voz) trafega direto entre navegadores.
  *
  * Desenvolvido por Jp Dev's
  */
@@ -17,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/healthz', (_req, res) => res.status(200).send('ok'));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -30,10 +32,15 @@ const wss = new WebSocketServer({ server, path: '/ws' });
  * }
  * Participant = {
  *   id, ws, name, avatarUrl, muted,
- *   broadcasts: { screen: {active, streamId}, camera: {active, streamId} }
+ *   broadcasts: {
+ *     screen: {active, streamId},
+ *     camera: {active, streamId},
+ *     voice:  {active, streamId}   // chamada de voz
+ *   }
  * }
  */
 const rooms = new Map();
+const BROADCAST_KINDS = new Set(['screen', 'camera', 'voice']);
 
 // Aceita apenas links diretos de imagem .png/.jpg/.jpeg (http/https)
 const IMAGE_URL_REGEX = /^https?:\/\/\S+\.(png|jpe?g)(\?\S*)?(#\S*)?$/i;
@@ -67,10 +74,11 @@ function newParticipant(id, ws, name, avatarUrl) {
     ws,
     name,
     avatarUrl: isValidAvatarUrl(avatarUrl) ? avatarUrl.trim() : null,
-    muted: false,
+    muted: true,
     broadcasts: {
       screen: { active: false, streamId: null },
-      camera: { active: false, streamId: null }
+      camera: { active: false, streamId: null },
+      voice: { active: false, streamId: null }
     }
   };
 }
@@ -245,14 +253,14 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      // payload: { kind: 'screen' | 'camera', streamId }
+      // payload: { kind: 'screen' | 'camera' | 'voice', streamId }
       case 'start-broadcast': {
         const { roomId, clientId } = ws.meta || {};
         const room = rooms.get(roomId);
         if (!room || !clientId) return;
         const p = room.participants.get(clientId);
         if (!p) return;
-        const kind = payload.kind === 'camera' ? 'camera' : 'screen';
+        const kind = BROADCAST_KINDS.has(payload.kind) ? payload.kind : 'screen';
         const streamId = (payload.streamId || '').toString().slice(0, 200) || null;
 
         p.broadcasts[kind] = { active: true, streamId };
@@ -261,14 +269,14 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      // payload: { kind: 'screen' | 'camera' }
+      // payload: { kind: 'screen' | 'camera' | 'voice' }
       case 'stop-broadcast': {
         const { roomId, clientId } = ws.meta || {};
         const room = rooms.get(roomId);
         if (!room || !clientId) return;
         const p = room.participants.get(clientId);
         if (!p) return;
-        const kind = payload.kind === 'camera' ? 'camera' : 'screen';
+        const kind = BROADCAST_KINDS.has(payload.kind) ? payload.kind : 'screen';
 
         p.broadcasts[kind] = { active: false, streamId: null };
         broadcastToRoom(room, 'broadcast-stopped', { id: clientId, kind }, clientId);
@@ -380,6 +388,6 @@ const heartbeat = setInterval(() => {
 wss.on('close', () => clearInterval(heartbeat));
 
 server.listen(PORT, () => {
-  console.log(`Kpnc Broadcasts rodando em http://localhost:${PORT}`);
+  console.log(`Kpnc Telas rodando em http://localhost:${PORT}`);
   console.log(`Desenvolvido por Jp Dev's`);
 });
