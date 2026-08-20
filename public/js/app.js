@@ -22,7 +22,7 @@
     '480p': { width: 854, height: 480, frameRate: 24 }
   };
 
-  const IMAGE_URL_REGEX = /^https?:\/\/\S+\.(png|jpe?g)(\?\S*)?(#\S*)?$/i;
+  const IMAGE_URL_REGEX = /^https?:\/\/\S+$/i;
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
@@ -237,7 +237,16 @@
 
     pc.onicecandidate = (e) => { if (e.candidate) send('signal', { to: peerId, data: { type: 'candidate', candidate: e.candidate } }); };
     pc.ontrack = (e) => { const stream = e.streams[0]; if (stream) handleRemoteTrack(peerId, stream); };
-    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) destroyPeer(peerId); };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') {
+        try { pc.restartIce(); } catch { /* ignore */ }
+        setTimeout(() => {
+          if (state.peers.get(peerId) === peer && pc.connectionState === 'failed') destroyPeer(peerId);
+        }, 3500);
+      } else if (pc.connectionState === 'closed') {
+        destroyPeer(peerId);
+      }
+    };
     pc.onnegotiationneeded = () => negotiate(peer);
     if (hasLocalSenders(pc)) queueMicrotask(() => negotiate(peer));
 
@@ -812,7 +821,7 @@
   el.rangeMaster.addEventListener('input', () => { state.masterVolume = Number(el.rangeMaster.value) / 100; applyAudioSettings(); });
   el.checkboxDeafenMixer.addEventListener('change', () => setDeafen(el.checkboxDeafenMixer.checked));
 
-  el.saveProfile.addEventListener('click', () => {
+  el.btnSaveProfile.addEventListener('click', () => {
     if (!state.roomId) return;
     const name = el.profileName.value.trim(), avatar = el.profileAvatar.value.trim();
     if (!name) return showProfileError('Informe um nome.');

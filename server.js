@@ -43,10 +43,16 @@ const rooms = new Map();
 const BROADCAST_KINDS = new Set(['screen', 'camera', 'voice']);
 
 // Aceita apenas links diretos de imagem .png/.jpg/.jpeg (http/https)
-const IMAGE_URL_REGEX = /^https?:\/\/\S+\.(png|jpe?g)(\?\S*)?(#\S*)?$/i;
-
 function isValidAvatarUrl(url) {
-  return typeof url === 'string' && url.length <= 800 && IMAGE_URL_REGEX.test(url.trim());
+  if (typeof url !== 'string') return false;
+  const value = url.trim();
+  if (!value || value.length > 800 || /[\s<>"']/.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function genId(size = 16) {
@@ -295,7 +301,7 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      // Edição de perfil em tempo real: nome e/ou foto (somente link .png/.jpg/.jpeg)
+      // Edição de perfil em tempo real: nome e/ou foto (link HTTP/HTTPS de imagem)
       case 'update-profile': {
         const { roomId, clientId } = ws.meta || {};
         const room = rooms.get(roomId);
@@ -311,7 +317,7 @@ wss.on('connection', (ws) => {
           p.avatarUrl = null;
         } else if (typeof payload.avatarUrl === 'string') {
           if (!isValidAvatarUrl(payload.avatarUrl)) {
-            return send(ws, 'error', { message: 'A foto de perfil precisa ser um link direto de imagem .png, .jpg ou .jpeg.' });
+            return send(ws, 'error', { message: 'A foto de perfil precisa ser uma URL HTTP/HTTPS válida.' });
           }
           p.avatarUrl = payload.avatarUrl.trim();
         }
