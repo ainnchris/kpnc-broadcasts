@@ -61,6 +61,10 @@
           <span>Senha (opcional)</span>
           <input type="password" id="create-password" placeholder="Deixe em branco para não usar senha" maxlength="100">
         </label>
+        <label class="field">
+          <span>Foto de perfil (opcional, link .png ou .jpg)</span>
+          <input type="text" id="create-avatar" placeholder="https://exemplo.com/foto.jpg">
+        </label>
         <button type="submit" class="btn btn-primary btn-block">Criar sala</button>
       </form>
     </div>
@@ -80,6 +84,10 @@
         <label class="field">
           <span>Senha (se houver)</span>
           <input type="password" id="join-password" placeholder="Deixe em branco se não houver senha" maxlength="100">
+        </label>
+        <label class="field">
+          <span>Foto de perfil (opcional, link .png ou .jpg)</span>
+          <input type="text" id="join-avatar" placeholder="https://exemplo.com/foto.jpg">
         </label>
         <button type="submit" class="btn btn-secondary btn-block">Entrar na sala</button>
       </form>
@@ -103,6 +111,11 @@
       <button id="btn-broadcast" class="ctrl-btn ctrl-primary" type="button" title="Transmitir tela">
         <svg viewBox="0 0 24 24"><path d="M4 5h16v11H4z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 20h6M12 16v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>Transmitir tela</span>
+      </button>
+
+      <button id="btn-camera" class="ctrl-btn" type="button" title="Ligar câmera">
+        <svg viewBox="0 0 24 24"><path d="M4 7h11v10H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 10l5-3v10l-5-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>Câmera</span>
       </button>
 
       <button id="btn-mic" class="ctrl-btn" type="button" title="Ativar/desativar microfone">
@@ -184,12 +197,37 @@
     <!-- CONFIGURAÇÕES DE ÁUDIO E VÍDEO -->
     <section class="side-content" data-panel="settings">
       <div class="panel-block">
+        <h3>Editar perfil</h3>
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="profile-name" maxlength="40">
+        </label>
+        <label class="field">
+          <span>Foto de perfil (link .png ou .jpg)</span>
+          <input type="text" id="profile-avatar" placeholder="https://exemplo.com/foto.jpg">
+        </label>
+        <button id="btn-save-profile" class="btn btn-ghost btn-block" type="button">Salvar perfil</button>
+        <p class="hint-text" id="profile-error"></p>
+      </div>
+
+      <div class="panel-block">
         <h3>Sua transmissão</h3>
         <div class="self-preview-wrap">
           <video id="self-preview" autoplay muted playsinline></video>
           <p id="self-preview-empty" class="self-preview-empty">Você não está transmitindo</p>
         </div>
         <p class="hint-text">É aqui que você vê exatamente o que está sendo transmitido para os outros participantes.</p>
+      </div>
+
+      <div class="panel-block">
+        <h3>Qualidade da tela</h3>
+        <select id="select-quality">
+          <option value="auto">Automática — o navegador ajusta sozinho</option>
+          <option value="1080p">Nítida · 1080p — melhor qualidade e mais dados</option>
+          <option value="720p" selected>Padrão · 720p — bom equilíbrio pra maioria das redes</option>
+          <option value="480p">Economia · 480p — menos dados, ideal p/ internet lenta</option>
+        </select>
+        <p class="hint-text">Vale para a transmissão de tela. Pode ser trocada mesmo já transmitindo.</p>
       </div>
 
       <div class="panel-block">
