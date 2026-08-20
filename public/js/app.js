@@ -1,7 +1,8 @@
 /**
  * Kpnc Broadcasts — cliente
  * WebRTC mesh + signaling via WebSocket + chat em tempo real +
- * configurações de áudio/vídeo + auto-visualização da própria transmissão.
+ * tela e câmera + perfil/avatar em tempo real + configurações de
+ * áudio/vídeo + auto-visualização da própria transmissão.
  *
  * Desenvolvido por Jp Dev's
  */
@@ -20,6 +21,15 @@
     ]
   };
 
+  const QUALITY_PRESETS = {
+    auto: null,
+    '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+    '720p': { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+    '480p': { width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 24 } }
+  };
+
+  const IMAGE_URL_REGEX = /^https?:\/\/\S+\.(png|jpe?g)(\?\S*)?(#\S*)?$/i;
+
   /* ============================================================
    * Estado global da aplicação
    * ============================================================ */
@@ -27,23 +37,27 @@
     ws: null,
     selfId: null,
     selfName: '',
+    selfAvatarUrl: '',
     roomId: null,
     roomName: '',
     isOwner: false,
     ownerId: null,
     hasPassword: false,
-    participants: new Map(),   // id -> {id, name, muted, broadcasting}
-    peers: new Map(),          // id -> { pc, polite, makingOffer, ignoreOffer }
-    remoteStreams: new Map(),  // id -> MediaStream
+    participants: new Map(),     // id -> {id, name, avatarUrl, muted, broadcasts:{screen,camera}}
+    peers: new Map(),            // id -> { pc, polite, makingOffer, ignoreOffer }
+    remoteStreams: new Map(),    // "peerId:streamId" -> MediaStream
+    hiddenTiles: new Set(),      // ids de tiles que o usuário optou por não assistir (local)
     localScreenStream: null,
+    localCameraStream: null,
     localMicStream: null,
     micMuted: true,
-    broadcasting: false,
-    hiddenPeers: new Set(), // transmissões que o usuário optou por não assistir (só localmente)
+    broadcastingScreen: false,
+    broadcastingCamera: false,
+    screenQuality: '720p',
     selectedMicId: '',
     selectedSpeakerId: '',
     volume: 1,
-    noiseSuppression: true // cancelamento de eco/ruído do microfone, ligado por padrão
+    noiseSuppression: true
   };
 
   /* ============================================================
@@ -60,11 +74,13 @@
     createUsername: $('#create-username'),
     createRoomname: $('#create-roomname'),
     createPassword: $('#create-password'),
+    createAvatar: $('#create-avatar'),
 
     formJoin: $('#form-join'),
     joinUsername: $('#join-username'),
     joinRoomcode: $('#join-roomcode'),
     joinPassword: $('#join-password'),
+    joinAvatar: $('#join-avatar'),
 
     homeError: $('#home-error'),
 
@@ -76,6 +92,7 @@
     stageEmpty: $('#stage-empty'),
 
     btnBroadcast: $('#btn-broadcast'),
+    btnCamera: $('#btn-camera'),
     btnMic: $('#btn-mic'),
     btnMicLabel: $('#btn-mic-label'),
     btnSettings: $('#btn-settings'),
@@ -103,8 +120,15 @@
     participantsList: $('#participants-list'),
     countParticipants: $('#count-participants'),
 
+    profileName: $('#profile-name'),
+    profileAvatar: $('#profile-avatar'),
+    btnSaveProfile: $('#btn-save-profile'),
+    profileError: $('#profile-error'),
+
     selfPreview: $('#self-preview'),
     selfPreviewEmpty: $('#self-preview-empty'),
+
+    selectQuality: $('#select-quality'),
 
     selectMic: $('#select-mic'),
     btnToggleMicSettings: $('#btn-toggle-mic-settings'),
@@ -178,7 +202,8 @@
         onEnteredRoom(payload);
         break;
       case 'error':
-        showError(payload.message);
+        if (state.roomId) toast(payload.message, 'error');
+        else showHomeError(payload.message);
         break;
       case 'participant-joined':
         state.participants.set(payload.participant.id, payload.participant);
@@ -203,10 +228,10 @@
         addChatMessage(payload);
         break;
       case 'broadcast-started':
-        onRemoteBroadcastStarted(payload.id);
+        onRemoteBroadcastStarted(payload.id, payload.kind, payload.streamId);
         break;
       case 'broadcast-stopped':
-        onRemoteBroadcastStopped(payload.id);
+        onRemoteBroadcastStopped(payload.id, payload.kind);
         break;
       case 'participant-muted': {
         const p = state.participants.get(payload.id);
@@ -232,11 +257,11 @@
     }
   }
 
-  function showError(message) {
+  function showHomeError(message) {
     el.homeError.textContent = message;
     el.homeError.classList.remove('hidden');
   }
-  function clearError() {
+  function clearHomeError() {
     el.homeError.classList.add('hidden');
     el.homeError.textContent = '';
   }
@@ -244,35 +269,53 @@
   /* ============================================================
    * Fluxo: criar / entrar em sala
    * ============================================================ */
+  function isValidImageUrl(url) {
+    return !url || IMAGE_URL_REGEX.test(url.trim());
+  }
+
   el.formCreate.addEventListener('submit', async (e) => {
     e.preventDefault();
-    clearError();
+    clearHomeError();
+    const avatarUrl = el.createAvatar.value.trim();
+    if (avatarUrl && !isValidImageUrl(avatarUrl)) {
+      showHomeError('A foto de perfil precisa ser um link direto de imagem .png, .jpg ou .jpeg.');
+      return;
+    }
     try {
       if (!state.ws) await connectSocket();
       state.selfName = el.createUsername.value.trim();
+      state.selfAvatarUrl = avatarUrl;
       send('create-room', {
         userName: state.selfName,
         roomName: el.createRoomname.value.trim(),
-        password: el.createPassword.value
+        password: el.createPassword.value,
+        avatarUrl
       });
     } catch (err) {
-      showError('Não foi possível conectar ao servidor.');
+      showHomeError('Não foi possível conectar ao servidor.');
     }
   });
 
   el.formJoin.addEventListener('submit', async (e) => {
     e.preventDefault();
-    clearError();
+    clearHomeError();
+    const avatarUrl = el.joinAvatar.value.trim();
+    if (avatarUrl && !isValidImageUrl(avatarUrl)) {
+      showHomeError('A foto de perfil precisa ser um link direto de imagem .png, .jpg ou .jpeg.');
+      return;
+    }
     try {
       if (!state.ws) await connectSocket();
       state.selfName = el.joinUsername.value.trim();
+      state.selfAvatarUrl = avatarUrl;
       send('join-room', {
         userName: state.selfName,
         roomId: el.joinRoomcode.value.trim().toUpperCase(),
-        password: el.joinPassword.value
+        password: el.joinPassword.value,
+        avatarUrl
       });
     } catch (err) {
-      showError('Não foi possível conectar ao servidor.');
+      showHomeError('Não foi possível conectar ao servidor.');
     }
   });
 
@@ -306,6 +349,9 @@
     const link = `${location.origin}${location.pathname}?room=${state.roomId}`;
     el.inviteLink.value = link;
 
+    el.profileName.value = state.selfName;
+    el.profileAvatar.value = state.selfAvatarUrl;
+
     addSystemChatLine(`Bem-vindo(a) à sala "${state.roomName}".`);
 
     renderParticipants();
@@ -321,31 +367,40 @@
   function cleanupAndGoHome() {
     send('leave-room');
     for (const id of Array.from(state.peers.keys())) destroyPeer(id);
-    if (state.localScreenStream) {
-      state.localScreenStream.getTracks().forEach((t) => t.stop());
-      state.localScreenStream = null;
-    }
-    if (state.localMicStream) {
-      state.localMicStream.getTracks().forEach((t) => t.stop());
-      state.localMicStream = null;
-    }
-    state.broadcasting = false;
+    [state.localScreenStream, state.localCameraStream, state.localMicStream].forEach((s) => {
+      if (s) s.getTracks().forEach((t) => t.stop());
+    });
+    state.localScreenStream = null;
+    state.localCameraStream = null;
+    state.localMicStream = null;
+    state.broadcastingScreen = false;
+    state.broadcastingCamera = false;
     state.roomId = null;
     state.participants.clear();
     state.remoteStreams.clear();
+    state.hiddenTiles.clear();
     el.videoGrid.querySelectorAll('.video-tile').forEach((t) => t.remove());
     el.stageEmpty.classList.remove('hidden');
     el.chatMessages.innerHTML = '';
     el.screenRoom.classList.add('hidden');
     el.screenHome.classList.remove('hidden');
     el.roomIndicator.classList.add('hidden');
-    updateBroadcastButtonUI();
+    updateBroadcastButtonsUI();
   }
 
   el.btnLeave.addEventListener('click', cleanupAndGoHome);
 
   /* ============================================================
    * WebRTC — Perfect Negotiation por par de participantes
+   *
+   * Correção de bug: a versão anterior forçava uma negociação
+   * "às cegas" (via datachannel) assim que dois participantes se
+   * conectavam. Quando alguém já estava transmitindo, isso podia
+   * colidir com a negociação real (que já carrega a faixa de
+   * vídeo) e deixar quem entrou depois com a tela preta, só
+   * resolvido reiniciando a transmissão. Agora a negociação só
+   * começa quando existe mídia de verdade para enviar — sem
+   * disparo artificial — o que elimina essa corrida.
    * ============================================================ */
   function ensurePeer(peerId) {
     if (state.peers.has(peerId)) return state.peers.get(peerId);
@@ -355,17 +410,16 @@
     const ps = { pc, polite, makingOffer: false, ignoreOffer: false };
     state.peers.set(peerId, ps);
 
-    // Tracks locais já ativos entram nesta nova conexão
+    // Tracks locais já ativos entram nesta nova conexão — isso já é
+    // suficiente para disparar a negociação automaticamente.
     if (state.localScreenStream) {
       state.localScreenStream.getTracks().forEach((track) => pc.addTrack(track, state.localScreenStream));
     }
+    if (state.localCameraStream) {
+      state.localCameraStream.getTracks().forEach((track) => pc.addTrack(track, state.localCameraStream));
+    }
     if (state.localMicStream) {
       state.localMicStream.getTracks().forEach((track) => pc.addTrack(track, state.localMicStream));
-    }
-
-    // O lado "impolite" força a primeira negociação (mesmo sem tracks) via datachannel
-    if (!polite) {
-      pc.createDataChannel('kpnc-keepalive');
     }
 
     pc.onnegotiationneeded = async () => {
@@ -385,25 +439,35 @@
     };
 
     pc.ontrack = (event) => {
-      let stream = state.remoteStreams.get(peerId);
-      if (!stream) {
-        stream = new MediaStream();
-        state.remoteStreams.set(peerId, stream);
-      }
-      stream.addTrack(event.track);
+      const remoteStream = event.streams[0] || new MediaStream([event.track]);
+      const key = `${peerId}:${remoteStream.id}`;
+      if (!state.remoteStreams.has(key)) state.remoteStreams.set(key, remoteStream);
+      const stream = state.remoteStreams.get(key);
+      if (!stream.getTracks().includes(event.track)) stream.addTrack(event.track);
+
       const participant = state.participants.get(peerId);
-      if (participant && participant.broadcasting) showRemoteTile(peerId, stream);
-      else attachHiddenAudio(peerId, stream);
+      const kind = resolveKindForStream(peerId, remoteStream.id);
+      const active = kind && participant && participant.broadcasts && participant.broadcasts[kind] && participant.broadcasts[kind].active;
+
+      if (active) showRemoteTile(peerId, remoteStream.id, stream, kind, participant.name);
+      else attachHiddenAudio(peerId, remoteStream.id, stream);
     };
 
     pc.onconnectionstatechange = () => {
       if (['failed', 'closed'].includes(pc.connectionState)) {
-        // A limpeza real ocorre via participant-left; aqui só avisamos.
         console.warn(`Conexão com ${peerId}: ${pc.connectionState}`);
       }
     };
 
     return ps;
+  }
+
+  function resolveKindForStream(peerId, streamId) {
+    const p = state.participants.get(peerId);
+    if (!p || !p.broadcasts) return null;
+    if (p.broadcasts.screen && p.broadcasts.screen.streamId === streamId) return 'screen';
+    if (p.broadcasts.camera && p.broadcasts.camera.streamId === streamId) return 'camera';
+    return null;
   }
 
   async function handleSignal(peerId, data) {
@@ -439,9 +503,14 @@
       ps.pc.close();
       state.peers.delete(peerId);
     }
-    state.remoteStreams.delete(peerId);
-    removeRemoteTile(peerId);
-    removeHiddenAudio(peerId);
+    for (const key of Array.from(state.remoteStreams.keys())) {
+      if (key.startsWith(`${peerId}:`)) {
+        const streamId = key.slice(peerId.length + 1);
+        removeRemoteTile(peerId, streamId);
+        removeHiddenAudio(peerId, streamId);
+        state.remoteStreams.delete(key);
+      }
+    }
   }
 
   function removeParticipantUI(peerId) {
@@ -460,21 +529,26 @@
     el.stageEmpty.classList.toggle('hidden', hasTiles);
   }
 
-  function renderLocalTile(stream) {
-    let tile = document.getElementById('tile-local');
+  function kindLabel(kind) {
+    return kind === 'camera' ? 'Câmera' : 'Tela';
+  }
+
+  function renderLocalTile(kind, stream) {
+    const tileId = `tile-local-${kind}`;
+    let tile = document.getElementById(tileId);
     if (!tile) {
       tile = document.createElement('div');
-      tile.id = 'tile-local';
+      tile.id = tileId;
       tile.className = 'video-tile is-local';
       tile.innerHTML = `
         <video autoplay muted playsinline></video>
         <div class="tile-actions">
-          <button type="button" class="tile-action-btn btn-expand-tile" data-id="local" title="Tela cheia">
+          <button type="button" class="tile-action-btn btn-expand-tile" title="Tela cheia">
             <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
         <span class="tile-badge-you">Você</span>
-        <span class="tile-label"><span class="dot-live"></span>${escapeHtml(state.selfName || 'Você')}</span>
+        <span class="tile-label"><span class="dot-live"></span>${escapeHtml(state.selfName || 'Você')} · ${kindLabel(kind)}</span>
       `;
       el.videoGrid.appendChild(tile);
     }
@@ -482,47 +556,52 @@
     updateStageEmptyVisibility();
   }
 
-  function removeLocalTile() {
-    const tile = document.getElementById('tile-local');
+  function removeLocalTile(kind) {
+    const tile = document.getElementById(`tile-local-${kind}`);
     if (tile) tile.remove();
     updateStageEmptyVisibility();
   }
 
-  function showRemoteTile(peerId, stream) {
-    removeHiddenAudio(peerId);
-    let tile = document.getElementById(`tile-remote-${peerId}`);
-    const participant = state.participants.get(peerId);
-    const name = participant ? participant.name : 'Participante';
+  function showRemoteTile(peerId, streamId, stream, kind, name) {
+    const tileId = `tile-remote-${peerId}-${streamId}`;
+    removeHiddenAudio(peerId, streamId);
+
+    let tile = document.getElementById(tileId);
     if (!tile) {
       tile = document.createElement('div');
-      tile.id = `tile-remote-${peerId}`;
+      tile.id = tileId;
       tile.className = 'video-tile';
       tile.innerHTML = `
         <video autoplay playsinline></video>
         <div class="tile-hidden-overlay">
           <svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.9 10.9 0 0 1 12 5c5 0 9 4.5 10.5 7-.6 1-1.4 2.1-2.4 3.1M6.6 6.6C4.5 8 3 10 1.5 12c1.9 3 5.6 7 10.5 7 1.4 0 2.7-.3 3.9-.9M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <p>Você parou de assistir a transmissão de ${escapeHtml(name)}.</p>
-          <button type="button" class="btn btn-ghost btn-show-tile" data-id="${peerId}">Assistir novamente</button>
+          <p class="tile-hidden-text">Você parou de assistir.</p>
+          <button type="button" class="btn btn-ghost btn-show-tile" data-tile="${tileId}">Assistir novamente</button>
         </div>
         <div class="tile-actions">
-          <button type="button" class="tile-action-btn btn-hide-tile" data-id="${peerId}" title="Parar de assistir">
+          <button type="button" class="tile-action-btn btn-hide-tile" data-tile="${tileId}" title="Parar de assistir">
             <svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.9 10.9 0 0 1 12 5c5 0 9 4.5 10.5 7-.6 1-1.4 2.1-2.4 3.1M6.6 6.6C4.5 8 3 10 1.5 12c1.9 3 5.6 7 10.5 7 1.4 0 2.7-.3 3.9-.9M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button type="button" class="tile-action-btn btn-expand-tile" data-id="${peerId}" title="Tela cheia">
+          <button type="button" class="tile-action-btn btn-expand-tile" title="Tela cheia">
             <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
-        <span class="tile-label"><span class="dot-live"></span>${escapeHtml(name)}</span>
+        <span class="tile-label"><span class="dot-live"></span>${escapeHtml(name)} · ${kindLabel(kind)}</span>
       `;
       el.videoGrid.appendChild(tile);
+    } else {
+      const label = tile.querySelector('.tile-label');
+      if (label) label.innerHTML = `<span class="dot-live"></span>${escapeHtml(name)} · ${kindLabel(kind)}`;
+      const hiddenText = tile.querySelector('.tile-hidden-text');
+      if (hiddenText) hiddenText.textContent = `Você parou de assistir a transmissão de ${name}.`;
     }
+
     const videoEl = tile.querySelector('video');
     videoEl.srcObject = stream;
     videoEl.volume = state.volume;
     applySinkId(videoEl);
 
-    // Se o usuário já tinha optado por não assistir esta pessoa, mantém pausado
-    if (state.hiddenPeers.has(peerId)) {
+    if (state.hiddenTiles.has(tileId)) {
       tile.classList.add('is-hidden-view');
       videoEl.pause();
     } else {
@@ -531,17 +610,18 @@
     updateStageEmptyVisibility();
   }
 
-  function removeRemoteTile(peerId) {
-    const tile = document.getElementById(`tile-remote-${peerId}`);
+  function removeRemoteTile(peerId, streamId) {
+    const tile = document.getElementById(`tile-remote-${peerId}-${streamId}`);
     if (tile) tile.remove();
     updateStageEmptyVisibility();
   }
 
-  function attachHiddenAudio(peerId, stream) {
-    let audioEl = document.getElementById(`audio-remote-${peerId}`);
+  function attachHiddenAudio(peerId, streamId, stream) {
+    const audioId = `audio-remote-${peerId}-${streamId}`;
+    let audioEl = document.getElementById(audioId);
     if (!audioEl) {
       audioEl = document.createElement('audio');
-      audioEl.id = `audio-remote-${peerId}`;
+      audioEl.id = audioId;
       audioEl.autoplay = true;
       audioEl.style.display = 'none';
       document.body.appendChild(audioEl);
@@ -551,25 +631,34 @@
     applySinkId(audioEl);
   }
 
-  function removeHiddenAudio(peerId) {
-    const audioEl = document.getElementById(`audio-remote-${peerId}`);
+  function removeHiddenAudio(peerId, streamId) {
+    const audioEl = document.getElementById(`audio-remote-${peerId}-${streamId}`);
     if (audioEl) audioEl.remove();
   }
 
-  function onRemoteBroadcastStarted(peerId) {
+  function onRemoteBroadcastStarted(peerId, kind, streamId) {
     const p = state.participants.get(peerId);
-    if (p) p.broadcasting = true;
-    const stream = state.remoteStreams.get(peerId);
-    if (stream) showRemoteTile(peerId, stream);
+    if (!p) return;
+    p.broadcasts = p.broadcasts || { screen: { active: false, streamId: null }, camera: { active: false, streamId: null } };
+    p.broadcasts[kind] = { active: true, streamId };
     renderParticipants();
+
+    const existing = state.remoteStreams.get(`${peerId}:${streamId}`);
+    if (existing) showRemoteTile(peerId, streamId, existing, kind, p.name);
   }
 
-  function onRemoteBroadcastStopped(peerId) {
+  function onRemoteBroadcastStopped(peerId, kind) {
     const p = state.participants.get(peerId);
-    if (p) p.broadcasting = false;
-    removeRemoteTile(peerId);
-    const stream = state.remoteStreams.get(peerId);
-    if (stream) attachHiddenAudio(peerId, stream);
+    if (!p) return;
+    const prev = p.broadcasts && p.broadcasts[kind];
+    const prevStreamId = prev && prev.streamId;
+
+    if (prevStreamId) {
+      removeRemoteTile(peerId, prevStreamId);
+      const stream = state.remoteStreams.get(`${peerId}:${prevStreamId}`);
+      if (stream) attachHiddenAudio(peerId, prevStreamId, stream);
+    }
+    if (p.broadcasts) p.broadcasts[kind] = { active: false, streamId: null };
     renderParticipants();
   }
 
@@ -583,18 +672,18 @@
    * Parar de assistir uma transmissão específica (só localmente —
    * não afeta o que os outros participantes veem)
    * ============================================================ */
-  function toggleHideTile(peerId) {
-    const tile = document.getElementById(`tile-remote-${peerId}`);
+  function toggleHideTile(tileId) {
+    const tile = document.getElementById(tileId);
     if (!tile) return;
     const videoEl = tile.querySelector('video');
-    const isHidden = state.hiddenPeers.has(peerId);
+    const isHidden = state.hiddenTiles.has(tileId);
 
     if (isHidden) {
-      state.hiddenPeers.delete(peerId);
+      state.hiddenTiles.delete(tileId);
       tile.classList.remove('is-hidden-view');
       videoEl.play().catch(() => {});
     } else {
-      state.hiddenPeers.add(peerId);
+      state.hiddenTiles.add(tileId);
       tile.classList.add('is-hidden-view');
       videoEl.pause();
     }
@@ -641,10 +730,10 @@
   // Um único listener para todos os botões de ação dos tiles (criados dinamicamente)
   el.videoGrid.addEventListener('click', (event) => {
     const hideBtn = event.target.closest('.btn-hide-tile');
-    if (hideBtn) { toggleHideTile(hideBtn.dataset.id); return; }
+    if (hideBtn) { toggleHideTile(hideBtn.dataset.tile); return; }
 
     const showBtn = event.target.closest('.btn-show-tile');
-    if (showBtn) { toggleHideTile(showBtn.dataset.id); return; }
+    if (showBtn) { toggleHideTile(showBtn.dataset.tile); return; }
 
     const expandBtn = event.target.closest('.btn-expand-tile');
     if (expandBtn) {
@@ -661,44 +750,68 @@
   });
 
   /* ============================================================
+   * "Ver tela" / "Ver câmera" a partir da lista de participantes
+   * ============================================================ */
+  function tileIdFor(p, kind) {
+    if (p.isSelf) return `tile-local-${kind}`;
+    const b = p.broadcasts && p.broadcasts[kind];
+    return b && b.streamId ? `tile-remote-${p.id}-${b.streamId}` : null;
+  }
+
+  function focusTile(tileId) {
+    if (!tileId) return;
+    const tile = document.getElementById(tileId);
+    if (!tile) {
+      toast('Essa transmissão ainda está carregando — tente novamente em instantes.', 'error');
+      return;
+    }
+    if (state.hiddenTiles.has(tileId)) toggleHideTile(tileId);
+    el.sidePanel.classList.remove('open'); // libera a visão no celular
+    tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    tile.classList.add('is-focused');
+    setTimeout(() => tile.classList.remove('is-focused'), 1600);
+  }
+
+  /* ============================================================
    * Transmitir tela
    * ============================================================ */
   el.btnBroadcast.addEventListener('click', () => {
-    if (state.broadcasting) stopBroadcast();
-    else startBroadcast();
+    if (state.broadcastingScreen) stopScreenBroadcast();
+    else startScreenBroadcast();
   });
 
-  async function startBroadcast() {
+  async function startScreenBroadcast() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
       toast('Seu navegador não suporta compartilhamento de tela.', 'error');
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      const preset = QUALITY_PRESETS[state.screenQuality];
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: preset ? { ...preset } : true, audio: true });
       state.localScreenStream = stream;
 
-      // Visualização da própria transmissão (settings) + tile na grade principal
       el.selfPreview.srcObject = stream;
       el.selfPreviewEmpty.classList.add('hidden');
-      renderLocalTile(stream);
+      renderLocalTile('screen', stream);
 
       for (const [, ps] of state.peers) {
         stream.getTracks().forEach((track) => ps.pc.addTrack(track, stream));
       }
 
       const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) videoTrack.addEventListener('ended', () => stopBroadcast());
+      if (videoTrack) videoTrack.addEventListener('ended', () => stopScreenBroadcast());
 
-      state.broadcasting = true;
-      send('start-broadcast');
-      updateBroadcastButtonUI();
+      state.broadcastingScreen = true;
+      send('start-broadcast', { kind: 'screen', streamId: stream.id });
+      updateBroadcastButtonsUI();
+      renderParticipants();
       toast('Você está transmitindo sua tela.', 'success');
     } catch (err) {
       if (err.name !== 'NotAllowedError') toast('Não foi possível iniciar a transmissão de tela.', 'error');
     }
   }
 
-  function stopBroadcast() {
+  function stopScreenBroadcast() {
     if (!state.localScreenStream) return;
     const tracks = state.localScreenStream.getTracks();
 
@@ -712,23 +825,113 @@
     state.localScreenStream = null;
     el.selfPreview.srcObject = null;
     el.selfPreviewEmpty.classList.remove('hidden');
-    removeLocalTile();
+    removeLocalTile('screen');
 
-    state.broadcasting = false;
-    send('stop-broadcast');
-    updateBroadcastButtonUI();
+    state.broadcastingScreen = false;
+    send('stop-broadcast', { kind: 'screen' });
+    updateBroadcastButtonsUI();
+    renderParticipants();
   }
 
-  function updateBroadcastButtonUI() {
-    el.btnBroadcast.classList.toggle('is-active', state.broadcasting);
-    el.btnBroadcast.querySelector('span').textContent = state.broadcasting ? 'Parar transmissão' : 'Transmitir tela';
+  /* ============================================================
+   * Câmera
+   * ============================================================ */
+  el.btnCamera.addEventListener('click', () => {
+    if (state.broadcastingCamera) stopCameraBroadcast();
+    else startCameraBroadcast();
+  });
+
+  async function startCameraBroadcast() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast('Seu navegador não suporta câmera.', 'error');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      state.localCameraStream = stream;
+      renderLocalTile('camera', stream);
+
+      for (const [, ps] of state.peers) {
+        stream.getTracks().forEach((track) => ps.pc.addTrack(track, stream));
+      }
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) videoTrack.addEventListener('ended', () => stopCameraBroadcast());
+
+      state.broadcastingCamera = true;
+      send('start-broadcast', { kind: 'camera', streamId: stream.id });
+      updateBroadcastButtonsUI();
+      renderParticipants();
+      toast('Câmera ligada.', 'success');
+    } catch (err) {
+      toast('Não foi possível acessar a câmera.', 'error');
+    }
   }
+
+  function stopCameraBroadcast() {
+    if (!state.localCameraStream) return;
+    const tracks = state.localCameraStream.getTracks();
+
+    for (const [, ps] of state.peers) {
+      ps.pc.getSenders().forEach((sender) => {
+        if (sender.track && tracks.includes(sender.track)) ps.pc.removeTrack(sender);
+      });
+    }
+    tracks.forEach((t) => t.stop());
+
+    state.localCameraStream = null;
+    removeLocalTile('camera');
+
+    state.broadcastingCamera = false;
+    send('stop-broadcast', { kind: 'camera' });
+    updateBroadcastButtonsUI();
+    renderParticipants();
+  }
+
+  function updateBroadcastButtonsUI() {
+    el.btnBroadcast.classList.toggle('is-active', state.broadcastingScreen);
+    el.btnBroadcast.querySelector('span').textContent = state.broadcastingScreen ? 'Parar transmissão' : 'Transmitir tela';
+
+    el.btnCamera.classList.toggle('is-active', state.broadcastingCamera);
+    el.btnCamera.querySelector('span').textContent = state.broadcastingCamera ? 'Desligar câmera' : 'Câmera';
+  }
+
+  /* ============================================================
+   * Qualidade da transmissão de tela
+   * ============================================================ */
+  el.selectQuality.value = state.screenQuality;
+  el.selectQuality.addEventListener('change', async (e) => {
+    state.screenQuality = e.target.value;
+    if (!state.localScreenStream) return;
+    const track = state.localScreenStream.getVideoTracks()[0];
+    if (!track) return;
+    const preset = QUALITY_PRESETS[state.screenQuality];
+    try {
+      await track.applyConstraints(preset ? { ...preset } : {});
+      toast('Qualidade da transmissão atualizada.', 'success');
+    } catch {
+      toast('Não foi possível ajustar em tempo real neste navegador — pare e inicie a transmissão novamente para aplicar.', 'error');
+    }
+  });
 
   /* ============================================================
    * Microfone — captura, mute/desmute, troca de dispositivo
    * ============================================================ */
   el.btnMic.addEventListener('click', toggleMic);
   el.btnToggleMicSettings.addEventListener('click', toggleMic);
+
+  /* Constraints do microfone — cancelamento de eco/ruído liga por padrão
+     para evitar que quem transmite capte pelo microfone o áudio dos
+     outros participantes saindo da própria caixa de som (efeito de eco). */
+  function buildMicConstraints(deviceId) {
+    const audio = {
+      echoCancellation: state.noiseSuppression,
+      noiseSuppression: state.noiseSuppression,
+      autoGainControl: state.noiseSuppression
+    };
+    if (deviceId) audio.deviceId = { exact: deviceId };
+    return { audio };
+  }
 
   async function toggleMic() {
     if (!state.localMicStream) {
@@ -752,19 +955,6 @@
     updateMicButtonUI();
   }
 
-  /* Constraints do microfone — cancelamento de eco/ruído liga por padrão
-     para evitar que quem transmite capte pelo microfone o áudio dos
-     outros participantes saindo da própria caixa de som (efeito de eco). */
-  function buildMicConstraints(deviceId) {
-    const audio = {
-      echoCancellation: state.noiseSuppression,
-      noiseSuppression: state.noiseSuppression,
-      autoGainControl: state.noiseSuppression
-    };
-    if (deviceId) audio.deviceId = { exact: deviceId };
-    return { audio };
-  }
-
   async function setNoiseSuppression(enabled) {
     state.noiseSuppression = enabled;
     if (!state.localMicStream) return;
@@ -777,7 +967,6 @@
         autoGainControl: enabled
       });
     } catch {
-      // Alguns navegadores não aceitam mudar em tempo real — refaz a captura.
       await switchMicDevice(state.selectedMicId);
     }
   }
@@ -858,6 +1047,36 @@
     navigator.mediaDevices.addEventListener('devicechange', populateDeviceLists);
 
   /* ============================================================
+   * Editar perfil em tempo real (nome + foto por link)
+   * ============================================================ */
+  function showProfileError(message) {
+    el.profileError.textContent = message;
+    el.profileError.classList.add('hint-error');
+  }
+  function clearProfileError() {
+    el.profileError.textContent = '';
+    el.profileError.classList.remove('hint-error');
+  }
+
+  el.btnSaveProfile.addEventListener('click', () => {
+    clearProfileError();
+    const name = el.profileName.value.trim();
+    const avatarUrl = el.profileAvatar.value.trim();
+
+    if (!name) { showProfileError('Informe um nome.'); return; }
+    if (avatarUrl && !isValidImageUrl(avatarUrl)) {
+      showProfileError('A foto precisa ser um link direto de imagem terminando em .png, .jpg ou .jpeg.');
+      return;
+    }
+
+    state.selfName = name;
+    state.selfAvatarUrl = avatarUrl;
+    send('update-profile', { name, avatarUrl: avatarUrl || null });
+    renderParticipants();
+    toast('Perfil atualizado.', 'success');
+  });
+
+  /* ============================================================
    * Painel lateral — abas (Chat / Participantes / Configurações)
    * ============================================================ */
   function openPanel(tabName) {
@@ -903,27 +1122,58 @@
   }
 
   /* ============================================================
-   * Participantes — lista + ações do dono (expulsar / transferir)
+   * Participantes — lista + "ver tela/câmera" + ações do dono
    * ============================================================ */
+  function avatarMarkup(p) {
+    const initial = escapeHtml((p.name || '?').trim().charAt(0).toUpperCase() || '?');
+    if (p.avatarUrl) {
+      return `<img src="${escapeHtml(p.avatarUrl)}" alt="" onerror="this.outerHTML='${initial}'">`;
+    }
+    return initial;
+  }
+
   function renderParticipants() {
-    const list = [
-      { id: state.selfId, name: `${state.selfName} (você)`, muted: state.micMuted, broadcasting: state.broadcasting, isSelf: true },
-      ...Array.from(state.participants.values())
-        .filter((p) => p.id !== state.selfId)
-    ];
+    const selfEntry = {
+      id: state.selfId,
+      name: `${state.selfName} (você)`,
+      avatarUrl: state.selfAvatarUrl,
+      muted: state.micMuted,
+      isSelf: true,
+      broadcasts: {
+        screen: { active: state.broadcastingScreen, streamId: state.localScreenStream ? state.localScreenStream.id : null },
+        camera: { active: state.broadcastingCamera, streamId: state.localCameraStream ? state.localCameraStream.id : null }
+      }
+    };
+    const list = [selfEntry, ...Array.from(state.participants.values()).filter((p) => p.id !== state.selfId)];
 
     el.countParticipants.textContent = list.length;
 
     el.participantsList.innerHTML = list.map((p) => {
-      const initial = (p.name || '?').trim().charAt(0).toUpperCase() || '?';
       const isOwner = p.id === state.ownerId;
       const canManage = state.isOwner && !p.isSelf;
+      const screen = p.broadcasts && p.broadcasts.screen;
+      const camera = p.broadcasts && p.broadcasts.camera;
+
+      const statusParts = [];
+      if (screen && screen.active) statusParts.push('Transmitindo tela');
+      if (camera && camera.active) statusParts.push('Câmera ligada');
+      if (!statusParts.length) statusParts.push(p.muted ? 'Microfone mudo' : 'Sem transmissão');
+
+      const watchButtons = [];
+      if (!p.isSelf && screen && screen.active) {
+        watchButtons.push(`<button type="button" class="btn-watch" data-tile="${tileIdFor(p, 'screen')}"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Ver tela</button>`);
+      }
+      if (!p.isSelf && camera && camera.active) {
+        watchButtons.push(`<button type="button" class="btn-watch" data-tile="${tileIdFor(p, 'camera')}"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Ver câmera</button>`);
+      }
+
       return `
         <li class="participant-item" data-id="${p.id}">
-          <span class="participant-avatar">${escapeHtml(initial)}</span>
+          <span class="participant-avatar">${avatarMarkup(p)}</span>
           <span class="participant-info">
             <span class="participant-name">${escapeHtml(p.name)}${isOwner ? '<span class="badge-owner">DONO</span>' : ''}</span>
-            <span class="participant-sub">${p.broadcasting ? 'Transmitindo tela' : (p.muted ? 'Microfone mudo' : 'Sem transmissão')}</span>
+            <span class="participant-sub">${escapeHtml(statusParts.join(' · '))}</span>
+            ${watchButtons.length ? `<span class="participant-watch-row">${watchButtons.join('')}</span>` : ''}
           </span>
           ${canManage ? `
           <span class="participant-actions">
@@ -946,6 +1196,9 @@
       btn.addEventListener('click', () => {
         if (confirm('Transferir a posse da sala para este participante?')) send('transfer-ownership', { targetId: btn.dataset.id });
       });
+    });
+    el.participantsList.querySelectorAll('.btn-watch').forEach((btn) => {
+      btn.addEventListener('click', () => focusTile(btn.dataset.tile));
     });
   }
 
