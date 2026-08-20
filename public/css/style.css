@@ -338,6 +338,54 @@ input:focus, select:focus {
   font-size: 11px; font-weight: 700; letter-spacing: .03em;
 }
 
+/* Ações do tile: parar de assistir / tela cheia */
+.tile-actions {
+  position: absolute;
+  top: 10px; left: 10px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.tile-action-btn {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 10, 20, .65);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, .18);
+  color: #fff;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.tile-action-btn:hover { background: var(--accent); border-color: var(--accent); }
+.tile-action-btn svg { width: 15px; height: 15px; }
+
+/* Overlay de "parei de assistir" */
+.tile-hidden-overlay {
+  position: absolute; inset: 0;
+  display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px;
+  background: rgba(6, 10, 20, .92);
+  text-align: center;
+  padding: 20px;
+  z-index: 1;
+}
+.video-tile.is-hidden-view .tile-hidden-overlay { display: flex; }
+.video-tile.is-hidden-view video { visibility: hidden; }
+.tile-hidden-overlay svg { width: 26px; height: 26px; color: var(--text-faint); }
+.tile-hidden-overlay p { color: var(--text-muted); font-size: 13px; margin: 0; max-width: 220px; line-height: 1.5; }
+
+/* Tela cheia — se ajusta perfeitamente à orientação do dispositivo,
+   tanto no celular (retrato/paisagem) quanto no PC */
+video:fullscreen,
+video:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+}
+
 .stage-controls {
   display: flex;
   align-items: center;
@@ -509,6 +557,21 @@ input:focus, select:focus {
 }
 
 .hint-text { font-size: 12.5px; color: var(--text-faint); margin: 6px 0 0; line-height: 1.5; }
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 17px; height: 17px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 input[type="range"] {
   width: 100%;
