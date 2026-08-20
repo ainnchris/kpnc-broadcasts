@@ -4,7 +4,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
-const PORT = process.env.PORT || 3000;
+// Render fornece a porta através de PORT. O servidor também precisa escutar em
+// 0.0.0.0 para aceitar conexões externas, em vez de ficar acessível apenas
+// dentro do container.
+const PORT = Number(process.env.PORT) || 10000;
+const HOST = '0.0.0.0';
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
@@ -59,4 +63,5 @@ wss.on('connection',ws=>{
   ws.on('close',()=>leaveCurrentRoom(ws,true));ws.on('error',()=>leaveCurrentRoom(ws,true));
 });
 const heartbeat=setInterval(()=>{wss.clients.forEach(ws=>{if(ws.isAlive===false)return ws.terminate();ws.isAlive=false;ws.ping()})},30000);wss.on('close',()=>clearInterval(heartbeat));
-server.listen(PORT,()=>console.log(`Kpnc Broadcasts rodando em http://localhost:${PORT}`));
+
+server.listen(PORT, HOST, ()=>console.log(`Kpnc Broadcasts rodando em ${HOST}:${PORT}`));
