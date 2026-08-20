@@ -2,7 +2,7 @@
  * Kpnc Broadcasts
  * Servidor de signaling e gerenciamento de salas (WebRTC mesh).
  * O servidor NUNCA toca em midia: apenas troca mensagens de sinalizacao
- * (SDP/ICE), gerencia salas, participantes e o chat em tempo real.
+ * (SDP/ICE), gerencia salas, participantes, perfis e o chat em tempo real.
  *
  * Desenvolvido por Jp Dev's
  */
@@ -28,9 +28,19 @@ const wss = new WebSocketServer({ server, path: '/ws' });
  *   participants: Map<clientId, Participant>,
  *   createdAt
  * }
- * Participant = { id, ws, name, muted, broadcasting }
+ * Participant = {
+ *   id, ws, name, avatarUrl, muted,
+ *   broadcasts: { screen: {active, streamId}, camera: {active, streamId} }
+ * }
  */
 const rooms = new Map();
+
+// Aceita apenas links diretos de imagem .png/.jpg/.jpeg (http/https)
+const IMAGE_URL_REGEX = /^https?:\/\/\S+\.(png|jpe?g)(\?\S*)?(#\S*)?$/i;
+
+function isValidAvatarUrl(url) {
+  return typeof url === 'string' && url.length <= 800 && IMAGE_URL_REGEX.test(url.trim());
+}
 
 function genId(size = 16) {
   return crypto.randomBytes(size).toString('hex');
@@ -51,8 +61,28 @@ function send(ws, type, payload = {}) {
   }
 }
 
+function newParticipant(id, ws, name, avatarUrl) {
+  return {
+    id,
+    ws,
+    name,
+    avatarUrl: isValidAvatarUrl(avatarUrl) ? avatarUrl.trim() : null,
+    muted: false,
+    broadcasts: {
+      screen: { active: false, streamId: null },
+      camera: { active: false, streamId: null }
+    }
+  };
+}
+
 function publicParticipant(p) {
-  return { id: p.id, name: p.name, muted: p.muted, broadcasting: p.broadcasting };
+  return {
+    id: p.id,
+    name: p.name,
+    avatarUrl: p.avatarUrl,
+    muted: p.muted,
+    broadcasts: p.broadcasts
+  };
 }
 
 function roomParticipantsList(room) {
@@ -134,7 +164,7 @@ wss.on('connection', (ws) => {
           participants: new Map(),
           createdAt: Date.now()
         };
-        room.participants.set(clientId, { id: clientId, ws, name: userName, muted: false, broadcasting: false });
+        room.participants.set(clientId, newParticipant(clientId, ws, userName, payload.avatarUrl));
         rooms.set(roomId, room);
 
         ws.meta = { roomId, clientId };
@@ -162,7 +192,7 @@ wss.on('connection', (ws) => {
         }
 
         const clientId = genId(8);
-        room.participants.set(clientId, { id: clientId, ws, name: userName, muted: false, broadcasting: false });
+        room.participants.set(clientId, newParticipant(clientId, ws, userName, payload.avatarUrl));
         ws.meta = { roomId, clientId };
 
         send(ws, 'room-joined', {
@@ -215,15 +245,33 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      case 'start-broadcast':
+      // payload: { kind: 'screen' | 'camera', streamId }
+      case 'start-broadcast': {
+        const { roomId, clientId } = ws.meta || {};
+        const room = rooms.get(roomId);
+        if (!room || !clientId) return;
+        const p = room.participants.get(clientId);
+        if (!p) return;
+        const kind = payload.kind === 'camera' ? 'camera' : 'screen';
+        const streamId = (payload.streamId || '').toString().slice(0, 200) || null;
+
+        p.broadcasts[kind] = { active: true, streamId };
+        broadcastToRoom(room, 'broadcast-started', { id: clientId, kind, streamId }, clientId);
+        broadcastParticipants(room);
+        break;
+      }
+
+      // payload: { kind: 'screen' | 'camera' }
       case 'stop-broadcast': {
         const { roomId, clientId } = ws.meta || {};
         const room = rooms.get(roomId);
         if (!room || !clientId) return;
         const p = room.participants.get(clientId);
         if (!p) return;
-        p.broadcasting = type === 'start-broadcast';
-        broadcastToRoom(room, p.broadcasting ? 'broadcast-started' : 'broadcast-stopped', { id: clientId }, clientId);
+        const kind = payload.kind === 'camera' ? 'camera' : 'screen';
+
+        p.broadcasts[kind] = { active: false, streamId: null };
+        broadcastToRoom(room, 'broadcast-stopped', { id: clientId, kind }, clientId);
         broadcastParticipants(room);
         break;
       }
@@ -236,6 +284,31 @@ wss.on('connection', (ws) => {
         if (!p) return;
         p.muted = !!payload.muted;
         broadcastToRoom(room, 'participant-muted', { id: clientId, muted: p.muted }, clientId);
+        break;
+      }
+
+      // Edição de perfil em tempo real: nome e/ou foto (somente link .png/.jpg/.jpeg)
+      case 'update-profile': {
+        const { roomId, clientId } = ws.meta || {};
+        const room = rooms.get(roomId);
+        if (!room || !clientId) return;
+        const p = room.participants.get(clientId);
+        if (!p) return;
+
+        if (typeof payload.name === 'string' && payload.name.trim()) {
+          p.name = payload.name.trim().slice(0, 40);
+        }
+
+        if (payload.avatarUrl === '' || payload.avatarUrl === null) {
+          p.avatarUrl = null;
+        } else if (typeof payload.avatarUrl === 'string') {
+          if (!isValidAvatarUrl(payload.avatarUrl)) {
+            return send(ws, 'error', { message: 'A foto de perfil precisa ser um link direto de imagem .png, .jpg ou .jpeg.' });
+          }
+          p.avatarUrl = payload.avatarUrl.trim();
+        }
+
+        broadcastParticipants(room);
         break;
       }
 
