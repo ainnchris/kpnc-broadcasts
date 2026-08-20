@@ -7,8 +7,8 @@ const cssPath = path.join(root, 'public/css/style.css');
 function patch(file, replacements) {
   let s = fs.readFileSync(file, 'utf8');
   for (const [from, to] of replacements) {
-    if (!s.includes(from)) throw new Error(`Patch target not found in ${file}: ${from.slice(0, 120)}`);
-    s = s.replace(from, to);
+    if (s.includes(from)) s = s.replace(from, to);
+    else if (!s.includes(to)) throw new Error(`Patch target not found in ${file}: ${from.slice(0, 120)}`);
   }
   fs.writeFileSync(file, s);
 }
