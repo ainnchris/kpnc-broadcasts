@@ -1,4 +1,4 @@
-# Kpnc Broadcasts
+# Kpnc Telas
 
 Aplicação independente de compartilhamento de tela em tempo real usando WebRTC.
 
