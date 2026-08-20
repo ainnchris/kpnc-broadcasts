@@ -2,267 +2,287 @@
 <html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kpnc Broadcasts</title>
-<meta name="description" content="Kpnc Broadcasts - compartilhamento de tela em tempo real.">
-<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="css/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Kpnc Telas — chamadas, telas e voz em tempo real</title>
+<meta name="description" content="Crie uma sala, chame quem quiser e entre em chamada de voz, compartilhe tela e câmera direto do navegador. Sem instalar nada.">
+<meta name="theme-color" content="#14121B">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/img/favicon.svg">
+<link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-
-<!-- ===================== TOPBAR ===================== -->
-<header class="topbar">
-  <div class="brand">
-    <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
-      <circle cx="24" cy="24" r="6" fill="currentColor"/>
-      <path d="M15 24a9 9 0 0 1 9-9" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" opacity=".55"/>
-      <path d="M33 24a9 9 0 0 1-9 9" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" opacity=".55"/>
-      <path d="M9 24a15 15 0 0 1 15-15" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" opacity=".3"/>
-      <path d="M39 24a15 15 0 0 1-15 15" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" opacity=".3"/>
-    </svg>
-    <span class="brand-name">Kpnc <strong>Broadcasts</strong></span>
-  </div>
-
-  <div id="room-indicator" class="room-indicator hidden">
-    <span class="dot-live"></span>
-    <span id="room-indicator-name">—</span>
-    <span class="room-indicator-code" id="room-indicator-code">——————</span>
-  </div>
-
-  <div class="topbar-actions">
-    <button id="theme-toggle" class="icon-btn" type="button" aria-label="Alternar tema" title="Alternar tema claro/escuro">
-      <svg class="icon icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
-      <svg class="icon icon-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" fill="currentColor"/></svg>
-    </button>
-  </div>
-</header>
+<div id="toast-container" class="toast-container" aria-live="polite"></div>
 
 <!-- ===================== TELA INICIAL ===================== -->
 <main id="screen-home" class="screen screen-home">
-  <section class="home-hero">
-    <h1>Transmita sua tela.<br><span class="accent">Em tempo real, sem complicação.</span></h1>
-    <p class="home-sub">Crie uma sala, compartilhe o link e comece a transmitir. Chat ao vivo, controle de áudio e vídeo, e visualização da sua própria transmissão — tudo incluso.</p>
-  </section>
+  <button id="theme-toggle" class="icon-btn theme-toggle" type="button" aria-label="Alternar tema">
+    <svg viewBox="0 0 24 24" class="icon-moon"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
 
-  <section class="home-cards">
-    <div class="card">
-      <h2>Criar uma sala</h2>
-      <p class="card-hint">Você será o dono da sala e poderá gerenciar participantes.</p>
-      <form id="form-create">
-        <label class="field">
-          <span>Seu nome</span>
-          <input type="text" id="create-username" placeholder="Como quer ser chamado?" maxlength="40" required>
-        </label>
-        <label class="field">
-          <span>Nome da sala</span>
-          <input type="text" id="create-roomname" placeholder="Ex: Reunião de equipe" maxlength="60" required>
-        </label>
-        <label class="field">
-          <span>Senha (opcional)</span>
-          <input type="password" id="create-password" placeholder="Deixe em branco para não usar senha" maxlength="100">
-        </label>
-        <label class="field">
-          <span>Foto de perfil (opcional, link .png ou .jpg)</span>
-          <input type="text" id="create-avatar" placeholder="https://exemplo.com/foto.jpg">
-        </label>
-        <button type="submit" class="btn btn-primary btn-block">Criar sala</button>
-      </form>
+  <div class="home-card">
+    <div class="brand">
+      <span class="brand-mark">K</span>
+      <div class="brand-text">
+        <strong>Kpnc Telas</strong>
+        <small>chamada de voz, tela e câmera num link só</small>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>Entrar em uma sala</h2>
-      <p class="card-hint">Peça o código ou o link de convite para o dono da sala.</p>
-      <form id="form-join">
-        <label class="field">
-          <span>Seu nome</span>
-          <input type="text" id="join-username" placeholder="Como quer ser chamado?" maxlength="40" required>
-        </label>
-        <label class="field">
-          <span>Código da sala</span>
-          <input type="text" id="join-roomcode" placeholder="Ex: A1B2C3" maxlength="6" required style="text-transform:uppercase">
-        </label>
-        <label class="field">
-          <span>Senha (se houver)</span>
-          <input type="password" id="join-password" placeholder="Deixe em branco se não houver senha" maxlength="100">
-        </label>
-        <label class="field">
-          <span>Foto de perfil (opcional, link .png ou .jpg)</span>
-          <input type="text" id="join-avatar" placeholder="https://exemplo.com/foto.jpg">
-        </label>
-        <button type="submit" class="btn btn-secondary btn-block">Entrar na sala</button>
-      </form>
-    </div>
-  </section>
+    <p class="home-lead">Crie uma sala e já entra em chamada de voz com todo mundo. Compartilhe a tela, ligue a câmera e ajuste cada som no mixer — tudo no navegador.</p>
 
-  <p id="home-error" class="home-error hidden"></p>
-  <footer class="home-footer">Desenvolvido por <strong>Jp Dev's</strong></footer>
+    <div class="home-tags">
+      <span>Sem instalar</span><span>Chamada de voz</span><span>Mixer de áudio</span><span>Ponta a ponta</span>
+    </div>
+
+    <div class="home-tabs" role="tablist">
+      <button class="home-tab active" data-tab="create" type="button">Criar sala</button>
+      <button class="home-tab" data-tab="join" type="button">Entrar em sala</button>
+    </div>
+
+    <form id="form-create" class="home-form active" data-panel="create">
+      <label>Seu nome
+        <input id="create-username" maxlength="40" required placeholder="Como te chamam?" autocomplete="off">
+      </label>
+      <label>Nome da sala
+        <input id="create-roomname" maxlength="60" required placeholder="Ex: Time de Design" autocomplete="off">
+      </label>
+      <label>Foto de perfil (opcional)
+        <input id="create-avatar" maxlength="800" placeholder="Link .png ou .jpg" autocomplete="off">
+      </label>
+      <label class="checkbox-row">
+        <input id="create-lock" type="checkbox">
+        <span>Trancar a sala com senha</span>
+      </label>
+      <label id="create-password-wrap" class="hidden">Senha da sala
+        <input id="create-password" type="password" maxlength="100" placeholder="Senha" autocomplete="new-password">
+      </label>
+      <button type="submit" class="btn btn-primary btn-block">Criar sala</button>
+    </form>
+
+    <form id="form-join" class="home-form" data-panel="join">
+      <label>Seu nome
+        <input id="join-username" maxlength="40" required placeholder="Como te chamam?" autocomplete="off">
+      </label>
+      <label>Código da sala
+        <input id="join-roomcode" maxlength="6" required placeholder="ABC123" autocomplete="off" style="text-transform:uppercase">
+      </label>
+      <label>Foto de perfil (opcional)
+        <input id="join-avatar" maxlength="800" placeholder="Link .png ou .jpg" autocomplete="off">
+      </label>
+      <label>Senha (se a sala tiver)
+        <input id="join-password" type="password" maxlength="100" placeholder="Senha" autocomplete="off">
+      </label>
+      <button type="submit" class="btn btn-primary btn-block">Entrar na sala</button>
+    </form>
+
+    <p id="home-error" class="home-error hidden"></p>
+  </div>
+
+  <footer class="home-footer">Kpnc Telas — desenvolvido por Jp Dev's</footer>
 </main>
 
 <!-- ===================== TELA DA SALA ===================== -->
-<main id="screen-room" class="screen screen-room hidden">
+<div id="screen-room" class="screen screen-room hidden">
 
-  <section class="stage">
+  <!-- Coluna de participantes (estilo canal de voz) -->
+  <aside id="rail" class="rail">
+    <div class="rail-head">
+      <div class="rail-room-info">
+        <strong id="room-indicator-name"></strong>
+        <span id="room-indicator-code" class="room-code"></span>
+      </div>
+      <button id="btn-rail-close" class="icon-btn mobile-only" type="button" aria-label="Fechar">✕</button>
+    </div>
+
+    <div class="rail-section-title">Em chamada — <span id="count-participants">0</span></div>
+    <ul id="participants-list" class="participants-list"></ul>
+
+    <div class="rail-bottom">
+      <button id="btn-invite" class="rail-btn" type="button" title="Copiar link de convite">
+        <svg viewBox="0 0 24 24"><path d="M10.6 13.4a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.7l-1.4 1.4M13.4 10.6a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.4-1.4"/></svg>
+        Convidar
+      </button>
+      <button id="btn-mixer" class="rail-btn" type="button" title="Mixer de áudio">
+        <svg viewBox="0 0 24 24"><path d="M4 6v12M10 4v16M16 8v10M20 3v18"/></svg>
+        Mixer
+      </button>
+    </div>
+  </aside>
+
+  <!-- Palco principal -->
+  <main class="stage">
+    <header class="stage-top">
+      <button id="btn-menu" class="icon-btn mobile-only" type="button" aria-label="Participantes">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="stage-top-info">
+        <strong id="stage-room-name"></strong>
+        <span class="stage-top-sub">Kpnc Telas</span>
+      </div>
+      <div class="stage-top-actions">
+        <button id="btn-expand" class="icon-btn" type="button" title="Tela cheia">
+          <svg viewBox="0 0 24 24"><path d="M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4"/></svg>
+        </button>
+        <button id="theme-toggle-room" class="icon-btn" type="button" title="Alternar tema">
+          <svg viewBox="0 0 24 24" class="icon-moon"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </div>
+    </header>
+
     <div id="video-grid" class="video-grid">
-      <!-- tiles de vídeo inseridas via JS -->
-      <p id="stage-empty" class="stage-empty">Ninguém está transmitindo ainda. Clique em <strong>“Transmitir tela”</strong> para começar.</p>
+      <div id="stage-empty" class="stage-empty">
+        <p>Ninguém está transmitindo ainda.</p>
+        <p class="stage-empty-sub">Entre na chamada de voz ou compartilhe sua tela para começar.</p>
+      </div>
     </div>
 
-    <div class="stage-controls">
-      <button id="btn-broadcast" class="ctrl-btn ctrl-primary" type="button" title="Transmitir tela">
-        <svg viewBox="0 0 24 24"><path d="M4 5h16v11H4z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 20h6M12 16v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        <span>Transmitir tela</span>
-      </button>
-
-      <button id="btn-camera" class="ctrl-btn" type="button" title="Ligar câmera">
-        <svg viewBox="0 0 24 24"><path d="M4 7h11v10H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 10l5-3v10l-5-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-        <span>Câmera</span>
-      </button>
-
-      <button id="btn-mic" class="ctrl-btn" type="button" title="Ativar/desativar microfone">
-        <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 11a6 6 0 0 0 12 0M12 19v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
-        <span id="btn-mic-label">Mudo</span>
-      </button>
-
-      <button id="btn-settings" class="ctrl-btn" type="button" title="Configurações de áudio e vídeo">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1L15 3h-6l-.3 2.6a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7.7 7.7 0 0 0 1.7 1L9 21h6l.3-2.6a7.7 7.7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-        <span>Configurações</span>
-      </button>
-
-      <button id="btn-invite" class="ctrl-btn" type="button" title="Copiar link de convite">
-        <svg viewBox="0 0 24 24"><path d="M9 12a4 4 0 0 0 6 0l3-3a4 4 0 1 0-5.7-5.7L11 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 12a4 4 0 0 0-6 0l-3 3a4 4 0 1 0 5.7 5.7L13 19.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        <span>Convidar</span>
-      </button>
-
-      <button id="btn-panel-toggle" class="ctrl-btn only-mobile" type="button" title="Abrir painel">
-        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
-        <span>Painel</span>
-      </button>
-
-      <button id="btn-leave" class="ctrl-btn ctrl-danger" type="button" title="Sair da sala">
-        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>Sair</span>
-      </button>
+    <div class="self-preview-wrap" id="self-preview-wrap">
+      <video id="self-preview" muted playsinline></video>
+      <div id="self-preview-empty" class="self-preview-empty">Você</div>
     </div>
-  </section>
 
-  <!-- ===================== PAINEL LATERAL ===================== -->
-  <aside class="side-panel">
-    <button id="btn-panel-close" class="icon-btn only-mobile panel-close" type="button" aria-label="Fechar painel">
-      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-    </button>
-    <nav class="side-tabs">
-      <button class="side-tab active" data-tab="chat" type="button">Chat</button>
-      <button class="side-tab" data-tab="participants" type="button">Participantes <span id="count-participants" class="tab-badge">1</span></button>
-      <button class="side-tab" data-tab="settings" type="button">Configurações</button>
-    </nav>
+    <footer class="control-bar">
+      <button id="btn-call" class="ctrl-btn" type="button">
+        <span class="ctrl-icon"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c-.3 3.6 1 8.8 5 12.8s9.2 5.3 12.8 5l.7-3.7-4.3-2.3-1.9 1.9c-1.9-.8-3.6-2-5-3.4-1.4-1.4-2.6-3.1-3.4-5l1.9-1.9L7.9 4.8 4.5 5.5z"/></svg></span>
+        <span class="ctrl-label" id="btn-call-label">Chamada</span>
+      </button>
+      <button id="btn-mic" class="ctrl-btn" type="button" disabled>
+        <span class="ctrl-icon ico-mic"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M6 11a6 6 0 0 0 12 0M12 19v3"/></svg></span>
+        <span class="ctrl-label" id="btn-mic-label">Mudo</span>
+      </button>
+      <button id="btn-deafen" class="ctrl-btn" type="button">
+        <span class="ctrl-icon"><svg viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2" y="14" width="5" height="7" rx="1.5"/><rect x="17" y="14" width="5" height="7" rx="1.5"/></svg></span>
+        <span class="ctrl-label">Surdo</span>
+      </button>
+      <button id="btn-camera" class="ctrl-btn" type="button">
+        <span class="ctrl-icon"><svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h9A1.5 1.5 0 0 1 15 7.5v9A1.5 1.5 0 0 1 13.5 18h-9A1.5 1.5 0 0 1 3 16.5v-9z"/><path d="M15 9.5l6-3v11l-6-3"/></svg></span>
+        <span class="ctrl-label">Câmera</span>
+      </button>
+      <button id="btn-broadcast" class="ctrl-btn" type="button">
+        <span class="ctrl-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg></span>
+        <span class="ctrl-label">Tela</span>
+      </button>
+      <button id="btn-settings" class="ctrl-btn" type="button">
+        <span class="ctrl-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.3 2.9a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.5 2.4-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.3-2.9a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.5-2-1.6z"/></svg></span>
+        <span class="ctrl-label">Ajustes</span>
+      </button>
+      <button id="btn-leave" class="ctrl-btn ctrl-leave" type="button">
+        <span class="ctrl-icon"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+        <span class="ctrl-label">Sair</span>
+      </button>
+    </footer>
+  </main>
 
-    <!-- CHAT -->
-    <section class="side-content active" data-panel="chat">
+  <!-- Painel lateral: chat / mixer / convite / ajustes -->
+  <aside id="side-panel" class="side-panel">
+    <div class="side-panel-head">
+      <div class="side-tabs" role="tablist">
+        <button class="side-tab active" data-tab="chat" type="button">Chat</button>
+        <button class="side-tab" data-tab="mixer" type="button">Mixer</button>
+        <button class="side-tab" data-tab="invite" type="button">Convite</button>
+        <button class="side-tab" data-tab="settings" type="button">Ajustes</button>
+      </div>
+      <button id="btn-panel-close" class="icon-btn" type="button" aria-label="Fechar painel">✕</button>
+    </div>
+
+    <div class="side-content active" data-panel="chat">
       <div id="chat-messages" class="chat-messages"></div>
       <form id="form-chat" class="chat-form">
-        <input type="text" id="chat-input" placeholder="Escreva uma mensagem…" maxlength="1000" autocomplete="off">
-        <button type="submit" class="icon-btn icon-btn-accent" aria-label="Enviar mensagem">
-          <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 8 6 8-16-8Z" fill="currentColor"/></svg>
+        <input id="chat-input" maxlength="1000" placeholder="Mensagem para a sala" autocomplete="off">
+        <button type="submit" class="icon-btn" aria-label="Enviar">
+          <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
         </button>
       </form>
-    </section>
+    </div>
 
-    <!-- PARTICIPANTES -->
-    <section class="side-content" data-panel="participants">
-      <div class="panel-block">
-        <h3>Convidar</h3>
-        <div class="invite-box">
-          <input type="text" id="invite-link" readonly>
-          <button id="btn-copy-link" class="btn btn-ghost" type="button">Copiar</button>
+    <div class="side-content" data-panel="mixer">
+      <h4>Volume geral</h4>
+      <div class="mixer-row">
+        <span>Master</span>
+        <input id="range-master" type="range" min="0" max="100" value="100">
+      </div>
+      <label class="checkbox-row">
+        <input id="checkbox-deafen-mixer" type="checkbox">
+        <span>Silenciar tudo (modo surdo)</span>
+      </label>
+
+      <h4>Transmissões (telas e câmeras)</h4>
+      <ul id="mixer-broadcasts" class="mixer-list">
+        <li class="mixer-empty">Nenhuma transmissão com áudio no momento.</li>
+      </ul>
+
+      <h4>Vozes na chamada</h4>
+      <ul id="mixer-voices" class="mixer-list">
+        <li class="mixer-empty">Ninguém está em chamada de voz.</li>
+      </ul>
+    </div>
+
+    <div class="side-content" data-panel="invite">
+      <h4>Convide pessoas</h4>
+      <p class="hint">Qualquer pessoa com o link ou o código pode entrar na sala.</p>
+      <label>Link de convite
+        <div class="input-copy">
+          <input id="invite-link" readonly>
+          <button id="btn-copy-link" class="btn btn-secondary" type="button">Copiar</button>
         </div>
-        <div class="invite-code-row">
-          Código da sala: <strong id="invite-code">——————</strong>
+      </label>
+      <label>Código da sala
+        <div class="input-copy">
+          <input id="invite-code" readonly>
+          <button id="btn-copy-code" class="btn btn-secondary" type="button">Copiar</button>
+        </div>
+      </label>
+
+      <div id="owner-password-block" class="owner-block hidden">
+        <h4>Senha da sala</h4>
+        <div class="input-copy">
+          <input id="new-password" type="password" placeholder="Nova senha (vazio = sem senha)">
+          <button id="btn-save-password" class="btn btn-secondary" type="button">Salvar</button>
         </div>
       </div>
+    </div>
 
-      <div id="owner-password-block" class="panel-block hidden">
-        <h3>Senha da sala</h3>
-        <div class="invite-box">
-          <input type="password" id="new-password" placeholder="Nova senha (vazio remove)">
-          <button id="btn-save-password" class="btn btn-ghost" type="button">Salvar</button>
-        </div>
-      </div>
+    <div class="side-content" data-panel="settings">
+      <h4>Perfil</h4>
+      <label>Nome
+        <input id="profile-name" maxlength="40">
+      </label>
+      <label>Foto (link .png/.jpg)
+        <input id="profile-avatar" maxlength="800" placeholder="https://...">
+      </label>
+      <p id="profile-error" class="field-error"></p>
+      <button id="btn-save-profile" class="btn btn-secondary" type="button">Salvar perfil</button>
 
-      <div class="panel-block panel-block-grow">
-        <h3>Na sala</h3>
-        <ul id="participants-list" class="participants-list"></ul>
-      </div>
-    </section>
-
-    <!-- CONFIGURAÇÕES DE ÁUDIO E VÍDEO -->
-    <section class="side-content" data-panel="settings">
-      <div class="panel-block">
-        <h3>Editar perfil</h3>
-        <label class="field">
-          <span>Nome</span>
-          <input type="text" id="profile-name" maxlength="40">
-        </label>
-        <label class="field">
-          <span>Foto de perfil (link .png ou .jpg)</span>
-          <input type="text" id="profile-avatar" placeholder="https://exemplo.com/foto.jpg">
-        </label>
-        <button id="btn-save-profile" class="btn btn-ghost btn-block" type="button">Salvar perfil</button>
-        <p class="hint-text" id="profile-error"></p>
-      </div>
-
-      <div class="panel-block">
-        <h3>Sua transmissão</h3>
-        <div class="self-preview-wrap">
-          <video id="self-preview" autoplay muted playsinline></video>
-          <p id="self-preview-empty" class="self-preview-empty">Você não está transmitindo</p>
-        </div>
-        <p class="hint-text">É aqui que você vê exatamente o que está sendo transmitido para os outros participantes.</p>
-      </div>
-
-      <div class="panel-block">
-        <h3>Qualidade da tela</h3>
+      <h4>Vídeo</h4>
+      <label>Qualidade da tela
         <select id="select-quality">
-          <option value="auto">Automática — o navegador ajusta sozinho</option>
-          <option value="1080p">Nítida · 1080p — melhor qualidade e mais dados</option>
-          <option value="720p" selected>Padrão · 720p — bom equilíbrio pra maioria das redes</option>
-          <option value="480p">Economia · 480p — menos dados, ideal p/ internet lenta</option>
+          <option value="auto">Automática</option>
+          <option value="1080p">1080p</option>
+          <option value="720p" selected>720p</option>
+          <option value="480p">480p</option>
         </select>
-        <p class="hint-text">Vale para a transmissão de tela. Pode ser trocada mesmo já transmitindo.</p>
-      </div>
+      </label>
 
-      <div class="panel-block">
-        <h3>Microfone</h3>
-        <label class="field">
-          <span>Entrada de áudio</span>
-          <select id="select-mic"></select>
-        </label>
-        <button id="btn-toggle-mic-settings" class="btn btn-ghost btn-block" type="button">Mutar / Desmutar microfone</button>
-        <label class="checkbox-row">
-          <input type="checkbox" id="checkbox-noise-suppression" checked>
-          <span>Cancelamento de eco e ruído</span>
-        </label>
-        <p class="hint-text">Evita que o microfone capte a voz dos outros participantes saindo da sua caixa de som enquanto você transmite. Recomendado deixar ligado — use fones de ouvido para o melhor resultado.</p>
-      </div>
-
-      <div class="panel-block">
-        <h3>Saída de áudio</h3>
-        <label class="field">
-          <span>Alto-falante / fone</span>
-          <select id="select-speaker"></select>
-        </label>
-        <p class="hint-text" id="speaker-support-hint"></p>
-      </div>
-
-      <div class="panel-block">
-        <h3>Volume de reprodução</h3>
-        <input type="range" id="range-volume" min="0" max="100" value="100">
-      </div>
-    </section>
+      <h4>Áudio</h4>
+      <label>Microfone
+        <select id="select-mic"></select>
+      </label>
+      <label class="checkbox-row">
+        <input id="checkbox-noise-suppression" type="checkbox" checked>
+        <span>Cancelamento de ruído</span>
+      </label>
+      <label>Saída de som
+        <select id="select-speaker"></select>
+      </label>
+      <p id="speaker-support-hint" class="hint"></p>
+    </div>
   </aside>
-</main>
 
-<div id="toast-container" class="toast-container" aria-live="polite"></div>
+  <div id="drawer-backdrop" class="drawer-backdrop"></div>
+</div>
 
-<script src="js/app.js"></script>
+<div id="voice-audio-pool" aria-hidden="true"></div>
+
+<script src="/js/app.js"></script>
 </body>
 </html>
