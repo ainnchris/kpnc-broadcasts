@@ -1,0 +1,54 @@
+name: One-time stability fix
+
+on:
+  push:
+    branches: [fix/stability-and-functions]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Apply fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('public/js/app.js')
+          s = app.read_text(encoding='utf-8')
+          s = s.replace(
+              "const IMAGE_URL_REGEX = /^https?:\\/\\/\\S+\\.(png|jpe?g)(\\?\\S*)?(#\\S*)?$/i;",
+              "const IMAGE_URL_REGEX = /^https?:\\/\\/\\S+$/i;"
+          )
+          s = s.replace('el.saveProfile.addEventListener(', 'el.btnSaveProfile.addEventListener(')
+          old = "    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) destroyPeer(peerId); };"
+          new = """    pc.onconnectionstatechange = () => {\n      if (pc.connectionState === 'failed') {\n        try { pc.restartIce(); } catch { /* ignore */ }\n        setTimeout(() => {\n          if (state.peers.get(peerId) === peer && pc.connectionState === 'failed') destroyPeer(peerId);\n        }, 3500);\n      } else if (pc.connectionState === 'closed') {\n        destroyPeer(peerId);\n      }\n    };"""
+          if old in s:
+              s = s.replace(old, new)
+          app.write_text(s, encoding='utf-8')
+
+          server = Path('server.js')
+          s = server.read_text(encoding='utf-8')
+          old = "const IMAGE_URL_REGEX = /^https?:\\/\\/\\S+\\.(png|jpe?g)(\\?\\S*)?(#\\S*)?$/i;\n\nfunction isValidAvatarUrl(url) {\n  return typeof url === 'string' && url.length <= 800 && IMAGE_URL_REGEX.test(url.trim());\n}"
+          new = """function isValidAvatarUrl(url) {\n  if (typeof url !== 'string') return false;\n  const value = url.trim();\n  if (!value || value.length > 800 || /[\\s<>\"']/.test(value)) return false;\n  try {\n    const parsed = new URL(value);\n    return parsed.protocol === 'http:' || parsed.protocol === 'https:';\n  } catch {\n    return false;\n  }\n}"""
+          if old in s:
+              s = s.replace(old, new)
+          s = s.replace("(somente link .png/.jpg/.jpeg)", "(link HTTP/HTTPS de imagem)")
+          s = s.replace("A foto de perfil precisa ser um link direto de imagem .png, .jpg ou .jpeg.", "A foto de perfil precisa ser uma URL HTTP/HTTPS válida.")
+          server.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit fixes and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/one-time-stability-fix.yml
+          git add -- public/js/app.js server.js .github/workflows/one-time-stability-fix.yml
+          git commit -m "Fix broken controls and WebRTC recovery"
+          git push
